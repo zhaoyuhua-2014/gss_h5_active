@@ -470,7 +470,7 @@
 			<div class="redEnvelopeRain_wrap redRain_bg">
 				<div class="redRain_top">
 					<div class="redRain_top_back close_icon" @click="onClickBack"></div>
-					<div class="redRain_top_title titBg" v-text="'我的红包(10)'"></div>
+					<div class="redRain_top_title titBg" v-text="'我的红包('+clickNum+')'"></div>
 					<div class="redRain_top_rule_btn" @click="onClickRuleBtn">红包雨规则</div>
 				</div>
 				<div class="redRain_body" id="red_packet" v-bind:style="{height:bodyHeight+'px'}" v-cloak v-show="gameStatus != 0">
@@ -545,7 +545,7 @@
 				</div>
 
 				<div class="redRain_bottom" v-cloak>
-					<p class="red_msg" v-show="gameStatus == 2">距离结束还有<span class="timeNumber"></span>秒</p>
+					<p class="red_msg" v-show="gameStatus == 2">距离结束还有<span class="timeNumber" v-html="countDownTimeNum"></span>秒</p>
 				</div>
 			</div>
 		</div>
@@ -569,47 +569,69 @@
 				"tokenId": common.getUrlParam('tokenId'),
 				"secretKey": common.getUrlParam('secretKey'),
 			};
-			var timeDom = $('.timeNumber');
+			var timeDom = $('.red_msg .timeNumber');
 						  
 			//初始化图片
-			let pageBg = 'activeassets/img/page_bg.png'
-			let imgjishi = 'activeassets/img/daojishi.png'
-			let bgPlan = 'activeassets/img/bg-plan.jpg'
-			let redpacket = 'activeassets/img/redpacket.png'
-			let close = 'activeassets/img/close.png'
-			let openRedpacket = 'activeassets/img/open-redpacket.png'
-			let open = 'activeassets/img/open.png'
-			let cursorAnimation = 'activeassets/img/cursor-animation.png'
-		
-			let countDown = 'activeassets/audio/countdown.mp3'
-			let openRedRain = 'activeassets/audio/open-redpacket.mp3'
-			let states = {};
-			let gameTimeInterval = 10;
-			let QingLvGroup;
-			let hitNum = 0;
-			let time = 25000;
-			let radio = document.documentElement.clientWidth/375;
-			let e;
-			let game = null
+			var pageBg = 'activeassets/img/page_bg.png'
+			var imgjishi = 'activeassets/img/daojishi.png'
+			var bgPlan = 'activeassets/img/bg-plan.jpg'
+			var redpacket = 'activeassets/img/redpacket.png'
+			var close = 'activeassets/img/close.png'
+			var openRedpacket = 'activeassets/img/open-redpacket.png'
+			var open = 'activeassets/img/open.png'
+			var cursorAnimation = 'activeassets/img/cursor-animation.png'
+			var redPacketOne = 'activeassets/img/redPacketImg.png'
+			var countDown = 'activeassets/audio/countdown.mp3'
+			var openRedRain = 'activeassets/audio/open-redpacket.mp3'
+			var states = {};
+			//拆红包动画定时器Id
+			var openRedAnimationTimerId= null;
+			//游戏倒计时调用间隔
+			var gameTimeInterval = 10;
+			//红包组
+			var QingLvGroup;
+			//生成红包个数
+			var hitNum = 0;
+			//游戏时间
+			var gameTime = 20000;
+			//屏幕缩放比
+			var radio = document.documentElement.clientWidth/375;
+			var e;
+			var game = null
+			
+			//打开红包的大图标.
+			var openDialog = null;
+			var openImg = null;
+			var redPacketImg = null;
+			var cursorPointer = null;
+			var daojishi = null;
+			
 			 //游戏动画配置
-			let config= {
+			var config= {
 				selfPool:40,
 				selfPic:'redpacket',
 				rate:0.5,
 				maxSpeed:1200,
 				minSpeed:400,
-				max:95
+				max:200
 			}
 			function rfuc(n){
 				return n*radio;
+			}
+			//39，随机：返回一个lower - upper之间的随机数
+			//下限，上限无论正负与大小，但必须是非的NaN的数据
+			function random(lower, upper){
+				lower = +lower || 0
+				upper = +upper || 0
+				return Math.random() * (upper - lower) + lower;
 			}
 			//初始化红包
 			function QingLv(config, game){
 				this.init = function(){
 					this.config = config;
+					//红包组
 					QingLvGroup = game.add.group();
 					QingLvGroup.enableBody = true;
-					console.log(QingLvGroup)
 					QingLvGroup.createMultiple(config.selfPool, config.selfPic); //初始化多个红包
 					QingLvGroup.setAll('anchor.y',1)
 					QingLvGroup.setAll('outOfBoundsKill', true);
@@ -620,19 +642,21 @@
 				};
 				this.createQL = function(){
 					e = QingLvGroup.getFirstExists(false);
-					
 					if(e) {
+						if(app.countDownTime <= 0){
+							return;
+						}
 						if(hitNum >= config.max) {
 							return;
 						}
 						hitNum++;
 						e.events.onInputDown.removeAll();
-						var ram= Math.random();
-						ram =ram<0.5?ram+=0.5: ram;
+						
+						var ram= random(0.8,1.2)
 						e.loadTexture(this.config.selfPic)
 						e.alpha = 1;
 						e.angle = 30
-						// e.scale.setTo(rfuc(ram));
+						e.scale.setTo(ram);
 						//返回min和max之间的随机整数。
 						e.reset(game.rnd.integerInRange(100, this.maxWidth), 100)  //红包生成的位置
 						e.body.velocity.x = game.rnd.integerInRange(-300, -150);   //红包移动的速度
@@ -643,99 +667,13 @@
 				};
 				this.hitted = function(sprite){
 					console.log(sprite)
-					if(Math.random() < 1/4 && ids.length == 0) {
-						sprite.kill();
-						//点击获得红包,游戏暂停
-						game.paused = true;
-
-						//背景
-						let hexGraphics = new Phaser.Graphics().beginFill(0x000000, 0.5).drawRect(0,0,document.documentElement.clientWidth,document.documentElement.clientHeight + 2);
-						let pausedMask = game.add.sprite(0, 0, hexGraphics.generateTexture())
-					  
-						let openDialog = game.add.sprite(rfuc(62), rfuc(150), 'openRedpacket')
-					  
-						let open = game.add.sprite(rfuc(130), rfuc(300), 'open')
-						open.inputEnabled = true;
 					
-						let result = game.add.sprite(rfuc(0), rfuc(120), 'redpacketResult')
-						result.visible = false
-
-						let userTicket = game.add.sprite(rfuc(78), rfuc(445), 'buttonUseTicket')
-						userTicket.visible = false
-
-						let goOn = game.add.sprite(rfuc(198), rfuc(445), 'buttonContinue')
-						goOn.visible = false
-
-						let ticketText = {};
-						let link = ''
-					  
-						//拆红包
-						let clickOpen = function() {
-
-							//游戏暂停时,点击事件无效,只能通过这种画热点的形式来绑定事件
-							let openRect = new Phaser.Rectangle(rfuc(130), rfuc(315), 239, 239).copyFrom(open);
-
-							if (openRect.contains(game.input.x, game.input.y)) {
-							  let currentWidth = open.width
-
-							  //拆红包动画
-							  let tempArr = [2, 4, 8, 4, 2, 1]
-							  let index = 0;
-							  let timer = setInterval(function() {
-								if (index > tempArr.length-1) { index = 0 }
-								open.width = currentWidth / tempArr[index]
-								open.height = open.height
-								open.left = game.world.centerX - open.width / 2
-								++index
-							  }, 200)
-							  game.input.onDown.remove(clickOpen, this);
-							  let arrIndex = Math.floor(Math.random() * ids.length)
-							  let redpacketId = ids.splice(arrIndex, 1)
-							  getIds.push(redpacketId[0])
-
-							  setTimeout(()=> {
-								timer && clearInterval(timer)
-								document.getElementById('audioOpen').play()
-								let text = redpackets[redpacketId[0]]
-								ticketText = game.add.text(0, rfuc(338), text, {fill: '#ffe67d', fontSize: '46px', fontWeight: 'bolder'})
-								ticketText.left = game.world.centerX - ticketText.width / 2    //文字相对于屏幕左右居中
-								openDialog.visible = false
-								open.visible = false
-								result.visible = true
-								userTicket.visible = true
-								goOn.visible = true
-								game.input.onDown.add(clickButton, this)
-							  }, 1000)
-							} 
-						};
-
-						let clickButton = function() {
-							let userTicketRect = new Phaser.Rectangle(rfuc(78), rfuc(445), 194, 66).copyFrom(userTicket);
-							let continueRect = new Phaser.Rectangle(rfuc(198), rfuc(445), 194, 66).copyFrom(goOn);
-
-							if (userTicketRect.contains(game.input.x, game.input.y)) {
-								window.location.replace(link)
-								game.input.onDown.remove(clickButton, this);
-
-							} else if (continueRect.contains(game.input.x, game.input.y)) {
-								result.visible = false
-								userTicket.visible = false
-								goOn.visible = false
-								pausedMask.visible = false
-								ticketText.visible = false
-								game.paused = false
-								game.input.onDown.remove(clickButton, this);
-							}
-						}
-
-						game.input.onDown.add(clickOpen, this)
-					} else {
 					  sprite.inputEnabled = false;
 					  var anim = sprite.animations.add(config.selfPic);
 					  sprite.play(config.selfPic, 40, false);
 					  anim.onComplete.add(this.fade, this, sprite)  
-					}
-					clickNum ++
+					
+					app.clickNum ++
 				};
 				this.fade = function(sprite){
 					var tween = game.add.tween(sprite).to({alpha:0}, 300, 'Linear', true)
@@ -747,13 +685,9 @@
 			  }
 			
 			states.boot = function(game) {
-				console.log('boot')
 				this.preload = function() {
-					console.log('preload')
 					if (typeof(GAME) !== "undefined") {
-					   
 						this.load.baseURL = GAME + "/";
-						console.log(this.load.baseURL)
 					}
 					if (!game.device.desktop) {
 						this.scale.scaleMode = Phaser.ScaleManager.EXACT_FIT;
@@ -771,12 +705,12 @@
 				this.preload = function(game) {
 					//加载图片
 					game.load.spritesheet('daojishi', imgjishi, 250,120, 4)
-					game.load.image('bgPlan', bgPlan)
 					game.load.spritesheet('redpacket', redpacket, 144, 173, 2)
 					//game.load.image('close', close)
 					game.load.image('openRedpacket', openRedpacket)
-					game.load.image('open', open)
+					game.load.image('openImg', open)
 					game.load.image('pageBg', pageBg)
+					game.load.image('redPacketImg',redPacketOne)
 					game.load.spritesheet('cursorAnimation', cursorAnimation, 74, 108, 2)
 					game.load.audio('countDown', countDown)
 					game.load.audio('openRedRain', openRedRain)
@@ -794,87 +728,36 @@
 					// 物理系统
 					game.physics.startSystem(Phaser.Physics.ARCADE);
 
-					// 背景图
-					// var bgPlan = game.add.sprite(0, 0, 'pageBg');
-					// bgPlan.width = game.width;
-					// bgPlan.height = app.bodyHeight;
-					console.log(game)
-					var cursorPointer = game.add.sprite(game.world.centerX - 36, game.world.centerY + 86, 'cursorAnimation');
+					//单个红包sprite
+					redPacketImg = game.add.sprite(game.world.centerX - 70, game.world.centerY + 30, 'redPacketImg');
+					//小手sprite
+					cursorPointer = game.add.sprite(game.world.centerX - 36, game.world.centerY + 86, 'cursorAnimation');
 					var anim = cursorPointer.animations.add('cursorAnimation');
 					cursorPointer.play('cursorAnimation', 2, true);
-					console.log(game)
-					//   console.log(document.getElementById('audioCountDown').play())
-
-					//   document.getElementById('audioCountDown').play()
+					//音乐
 					var music = this.sound.add('countDown');
 					music.play();
-					// // 开始游戏倒计时
-					var daojishi = game.add.sprite(game.world.centerX - 140, game.world.centerY - 400, 'daojishi');
+					// 开始游戏倒计时  sprite
+					daojishi = game.add.sprite(game.world.centerX - 140, game.world.centerY - 400, 'daojishi');
 					var anim1 = daojishi.animations.add('daojishi');
 					daojishi.play('daojishi', 1, false);
-					anim1.onComplete.add(this.startGame, this, daojishi,anim ,cursorPointer);
+					anim1.onComplete.add(this.startGame, this, daojishi,anim ,cursorPointer,redPacketImg);
 				};
 				  
 				this.startGame = function(daojishi,cursorPointer){
 					
 					var cursorPointer3 = arguments[3]
+					var redPacketImg = arguments[4];
 					app.gameStatus = 2;
+					this.leftTime = gameTime
 					
-					this.leftTime = time
-					// let bgRainer = game.add.sprite(0, 0, 'bgRainer');
-					// bgRainer.width = game.width;
-					// bgRainer.height = game.height;
-					daojishi.visible = false;
-					cursorPointer3.visible = false;
+					daojishi.kill();
+					cursorPointer3.kill();
+					redPacketImg.kill();
 					
 					this.createQingLv();
-
-// 					//添加按钮,并绑定事件
-// 					let closeImg = game.add.button(rfuc(20), rfuc(20), 'close', function(){
-// 						game.paused = true
-// 						pausedMask.visible = true
-// 						exitDialog.visible = true
-// 						exitButton.visible = true
-// 						cancelButton.visible = true
-// 
-// 						game.input.onDown.add(buttonClick, this)
-// 					}.bind(this))
-					
-					// 剩余时间
-					// this.leftTimeText = game.add.text(0, 0, this.leftTime, {fill: '#FFF', fontSize: '40px', fontWeight: 'bolder'})
-					// this.leftTimeText.scale.setTo(rfuc(1))
-					// this.leftTimeText.fixedToCamera = true;
-					// this.leftTimeText.cameraOffset.setTo(game.camera.width - rfuc(80), rfuc(20));
-					//弹出的蒙层
-					let hexGraphics = new Phaser.Graphics().beginFill(0x000000, 0.5).drawRect(0,0,document.documentElement.clientWidth,document.documentElement.clientHeight + 2);
-					let pausedMask = game.add.sprite(0, 0, hexGraphics.generateTexture())
-					pausedMask.visible = false;
-
-// 					let exitDialog = game.add.sprite(rfuc(62), rfuc(150), 'dialogExit')
-// 					exitDialog.visible = false;
-// 
-// 					let exitButton = game.add.button(rfuc(80), rfuc(315), 'buttonExit')
-// 					exitButton.visible = false;
-// 
-// 					let isExit = false
-// 					let cancelButton = game.add.button(rfuc(200), rfuc(315), 'buttonCancel')
-// 					cancelButton.visible = false;
-// 					//repeat （delay，repeatCount，callback，callbackContext，arguments）→{ Phaser.TimerEvent }
-// 					console.log(Phaser.Timer.SECOND)
-					game.time.events.repeat(gameTimeInterval, this.leftTime, this.refreshTime, this)
-
-					let buttonClick = function() {
-						console.log(game.input)
-						let cancelRect = new Phaser.Rectangle(rfuc(200), rfuc(315), 194, 66).copyFrom(cancelButton);
-						if (cancelRect.contains(game.input.x, game.input.y)) {
-							game.input.onDown.remove(buttonClick, this)
-							game.paused = false
-							pausedMask.visible = false
-							exitDialog.visible = false
-							exitButton.visible = false
-							cancelButton.visible = false
-						}
-					}
+					//game.time.events.repeat(gameTimeInterval, this.leftTime, this.refreshTime, this)
+					game.time.events.loop(gameTimeInterval, this.refreshTime, this);
 				};
 
 				this.createQingLv = function(){
@@ -887,16 +770,66 @@
 				this.refreshTime = function(){
 					this.leftTime = this.leftTime - gameTimeInterval;
 					var tem = this.leftTime;
-					timeDom.html(parseFloat(tem/1000).toFixed(2))
+					app.countDownTime = tem;
+					var timeNumText = parseFloat(tem/1000).toFixed(2)
+					//console.log(timeDom.html(timeNumText))
 					if(this.leftTime === 0) {
-						game.paused = true;
+						openRed();
 					}
 				}
 			};
-			
+			//清除
+			states.clearMain = function(game){
+				this.preload = function(game){
+					console.log('clearMain preload')
+				};
+				this.create = function(){
+					console.log('clearMain create')
+				}
+			};
 			
 			// 倒计时开始
-			
+			function openRed(){
+				//点击获得红包,游戏暂停
+				//game.paused = true;
+				
+				//背景
+				var hexGraphics = new Phaser.Graphics().beginFill(0x000000, 0).drawRect(0,0,document.documentElement.clientWidth,document.documentElement.clientHeight + 2);
+				var pausedMask = game.add.sprite(0, 0, hexGraphics.generateTexture());
+				
+				//打开红包的大图标.
+				openDialog = game.add.sprite(rfuc(62), rfuc(150), 'openRedpacket')
+				//打开红包的原型小图标				  
+				openImg = game.add.sprite(rfuc(130), rfuc(300), 'openImg')
+				openImg.inputEnabled = true;
+						  
+				//拆红包
+				var clickOpen = function() {
+					
+					
+					//游戏暂停时,点击事件无效,只能通过这种画热点的形式来绑定事件
+					var openRect = new Phaser.Rectangle(rfuc(130), rfuc(315), 239, 239).copyFrom(openImg);
+				
+					if (openRect.contains(game.input.x, game.input.y)) {
+						var currentWidth = openImg.width
+						//拆红包动画
+						var tempArr = [2, 4, 8, 4, 2, 1]
+						var index = 0;
+						openRedAnimationTimerId = setInterval(function() {
+							if (index > tempArr.length-1) { index = 0 }
+							openImg.width = currentWidth / tempArr[index]
+							openImg.height = openImg.height
+							openImg.left = game.world.centerX - openImg.width / 2
+							++index
+						}, 200)
+						game.input.onDown.remove(clickOpen, this);
+						app.orderSubmit();
+					} 
+				};
+				
+				
+				game.input.onDown.add(clickOpen, this)
+			}
 			//alert(JSON.stringify(obj))
 			//命名空间
 			var app = new Vue({
@@ -906,19 +839,12 @@
 					redRainActive: {},
 					activeData: {},
 					gameStatus: 0, //-1  0表示按钮  1表示倒计时zhong  2倒计时结束游戏中 3.倒计时结束
-					gameCountDownNum: 3,
-					gameTimeClass: 'number3',
-					hitNum: 0,//配置项
+					
 					clickNum:0,//点击的红包的数量.
 					
-					// liParams1: [],
-					// liParams: [],
-					speed: 4,
 					timer: null,
 					activityTimerID: null,
-					duration: 12000, // 定义时间  游戏时间
-					countDownTime: gameTimeInterval,
-					redPageNum: 100, //生成的总红包数量
+					countDownTime: gameTime,
 					resultData: {}, //规则及中奖信息弹出框数据
 					alertState: 0, // 0， 1 规则 2 表示中奖消息 3,没中奖消息
 				},
@@ -967,28 +893,21 @@
 						game.state.add('boot', states.boot.bind(game));
 						game.state.add('preload', states.preload.bind(game));
 						game.state.add('main', states.main.bind(game));
+						game.state.add('clearMain',states.clearMain.bind(game));
 						game.state.start('boot');
 					}
 					this.pageInit();
-
-					//this.startRedPacket();
 				},
 				methods: {
 					dataInit: function() {
 						this.redRainActive = {};
 						this.activeData = {};
 						this.gameStatus = 0; //-1  0表示按钮  1表示倒计时zhong  2倒计时结束游戏中 3.倒计时结束
-						this.gameCountDownNum = 3;
-						this.gameTimeClass = 'number3';
 						
-						this.liParams1 = [];
-						this.liParams = [];
-						this.speed = 10; //自定义下落速度
+						this.clickNum=0;//点击的红包的数量.
 						this.timer = null; //表示定时器id
 						this.activityTimerID = null;
-						this.duration = 12000; // 定义时间  游戏时间
-						this.countDownTime = 20000;
-						this.redPageNum = 100;
+						this.countDownTime = gameTime;
 						this.resultData = {}; //arr:[{couponMoney:20,leastOrderMoney:100,createTime:1,endTime:2},{couponMoney:20,leastOrderMoney:100,createTime:1,endTime:2},]
 						this.alertState = 0; // 0， 1 规则 2 表示中奖消息 3,没中奖消息
 					},
@@ -1043,45 +962,11 @@
 					onClickStart: function() {
 						var _this = this;
 						this.gameStatus = 1;
-						_this.liParams = this.liParams1;
-
-						function loopAnim() {
-							console.log('1')
-							_this.renderDom();
-							_this.ret = window.requestAnimationFrame(loopAnim);
-						};
-						console.log('onckickStart')
-						game.state.start('main');
 						
-						_this.gameTimeClass = 'number' + _this.gameCountDownNum;
-// 						var countDownId = setInterval(function() {
-// 							_this.gameCountDownNum--;
-// 							_this.gameTimeClass = 'number' + _this.gameCountDownNum;
-// 							if (_this.gameCountDownNum <= 0) {
-// 								_this.gameStatus = 2;
-// 								clearInterval(countDownId)
-// 								loopAnim();
-// 								_this.timer = setInterval(function() {
-// 									_this.countDownTime = _this.countDownTime - 50;
-// 									if (_this.countDownTime <= 0) {
-// 										$('.redRain_body li').fadeOut("fast", function() {});
-// 										_this.gameStatus = 3;
-// 										_this.orderSubmit();
-// 										window.cancelAnimationFrame(_this.ret)
-// 										clearInterval(_this.timer)
-// 									} else {}
-// 									timeDom.html(parseFloat(_this.countDownTime / 1000).toFixed(2))
-// 								}, 50)
-// 							} else {
-// 
-// 							}
-// 
-// 						}, 1000);
+						game.state.start('main');
 					},
 					onClickBack: function() {
-						console.log('back')
 						if (this.gameStatus == 0) {
-							//window.history.back();
 							common.jsInteractiveApp({
 								name: 'gss_goBack'
 							})
@@ -1110,7 +995,6 @@
 					},
 					onCLickAlertBtn: function() {
 						if (this.alertState == 3) {
-							//window.history.back();
 							common.jsInteractiveApp({
 								name: 'gss_goHome'
 							})
@@ -1118,27 +1002,9 @@
 							common.jsInteractiveApp({
 								name: 'gss_jumpCoupon'
 							})
-							//this.$router.push({path:'coupon'})
 						} else {
 
 						}
-					},
-					renderDom: function() {
-						var arr = this.liParams;
-						var emptyArr = [];
-						var _this = this;
-
-						for (var index = 0; index < arr.length; index++) {
-							arr[index].top = +arr[index].top + _this.speed;
-							if (arr[index].top >= _this.bodyHeight) {
-
-							} else {
-
-							}
-							emptyArr.push(arr[index])
-
-						}
-						_this.liParams = emptyArr;
 					},
 					//点击开启触发红包
 					onClickOpenRedRain: function() {
@@ -1152,7 +1018,6 @@
 						if (_this.activityTimerID) {
 							clearInterval(_this.activityTimerID)
 						}
-						_this.onClickStart();
 						if (_this.activeData.state == 'activeStart') {
 							$.ajax({
 								url: this.HOST,
@@ -1160,9 +1025,9 @@
 								data: obj,
 								success: function(data) {
 									if (data.statusCode == 100000) {
-										
+										_this.onClickStart();
 									} else {
-
+										common.prompt(data.statusStr)
 									}
 								},
 								error: function(data) {
@@ -1175,10 +1040,11 @@
 					},
 					//红包雨结算
 					orderSubmit: function() {
+						
 						var _this = this;
 						var obj = {
 							method: 'account_red_envelope_rain',
-							totalNum:'10',
+							totalNum:this.clickNum,
 							activeId: this.redRainActive.id,
 							firmId: this.firmId
 						}
@@ -1187,7 +1053,8 @@
 							dataType: "jsonp",
 							data: obj,
 							success: function(data) {
-								_this.gameStatus = 0;
+								
+								_this.mainReactClear()
 								if (data.statusCode == 100000) {
 									var d = data.data || [];
 									if (d.length) {
@@ -1198,7 +1065,6 @@
 									} else {
 										_this.alertState = 3;
 									}
-									
 								} else {
 
 								}
@@ -1288,15 +1154,16 @@
 							_this.activeData = data;
 						}
 					},
-					//用来兼容不同浏览器
-					//我在deepin chrome63测试，发现requestAnimationFrame和webkitRequestAnimationFrame都支持，mozRequestAnimationFrame不支持
-					requestAnimat: function(callback) {
-						return window.requestAnimationFrame ||
-							window.webkitRequestAnimationFrame ||
-							window.mozRequestAnimationFrame || function(callback) {
-								setTimeout(callback, 1000 / 60);
-							};
+					mainReactClear(){
+						this.gameStatus = 0;
+						this.clickNum = 0;
+						openRedAnimationTimerId && clearInterval(openRedAnimationTimerId)
+						document.getElementById('audioOpen').play()
+						openDialog.kill();
+						openImg.kill();
+						game.state.start('clearMain');
 					}
+					
 				}
 			})
 		})
