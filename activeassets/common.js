@@ -3,13 +3,11 @@ var common={
 	//http:"http://app.guoss.cn/gss_api/server/api.do", // 正式
 	http:"http://testapp.guoss.cn/gssapi/server/api.do", // 正式
 	//http:"http://app.guoss.cn/gss_api/server/api.do", // 正式
-	websiteNode:'3301',//请求的站点
 	pageSize:'10',//请求商品每页的个数
 	pageNo:'1',
 	isalert:0,//自动登录时是否弹出异常信息
 	isColl:'-1',//判断是否收藏  默认为-1
 	isTrue:true,
-	dtd : $.Deferred(),
 	phoneNumberReg:/^(1)\d{10}$/,//判断手机号的正则表达式
 	stopEventBubble:function (event){
 		var e=event || window.event;

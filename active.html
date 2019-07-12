@@ -491,15 +491,15 @@
 				<div class="redRain_body_item" v-show="activeData.state == 'activeNoStart'" v-cloak>
 					<div class="redRain_info_box">
 						<p v-show="!redRainActive.first">活动结束</p>
-						<p>请期待下场</p>
-						<p v-text="'将于'+redRainActive.start+'进行'"></p>
+						<p v-text="redRainActive.first ? '请期待': '请期待下场' "></p>
+						<p v-text="'将于'+redRainActive.nearTime+'进行'"></p>
 					</div>
 					<div class="redRain_countDown" v-if="activeData.timeArr">
 						开始倒计时：<span class="day" v-text="activeData.timeArr[0]"></span>天<span class="hours" v-text="activeData.timeArr[1]"></span>小时<span
 						 class="Minute" v-text="activeData.timeArr[2]"></span>分钟<span class="second" v-text="activeData.timeArr[3]"></span>秒
 					</div>
 				</div>
-				<div class="redRain_body_btn" v-cloak @click="onClickOpenRedRain" v-show=" (activeData.state == 'activeStart' || activeData.state == 'activeEnd') && gameStatus == 0"
+				<div class="redRain_body_btn" v-cloak @click="onClickOpenRedRain" v-show=" (activeData.state == 'activeNum0' ||activeData.state == 'activeStart' || activeData.state == 'activeEnd') && gameStatus == 0"
 				 v-text="btnText">
 
 				</div>
@@ -529,7 +529,7 @@
 											</div>
 											<div class="result_item_right float_right">
 												<p class="top" v-text="'单笔实付满'+item.leastOrderMoney+'可用'"></p>
-												<p class="bottom" v-html="'有效期'+item.createTime+'<br/>至'+item.endTime+''"></p>
+												<p class="bottom" v-html="'有效期'+item.activeTime+'<br/>至'+item.endTime+''"></p>
 											</div>
 										</div>
 									</div>
@@ -570,7 +570,9 @@
 				"secretKey": common.getUrlParam('secretKey'),
 			};
 			var timeDom = $('.red_msg .timeNumber');
-						  
+			var audioElCountDown = document.getElementById('audioCountDown');
+			var audioElOpen = document.getElementById('audioOpen');
+			
 			//初始化图片
 			var pageBg = 'activeassets/img/page_bg.png'
 			var imgjishi = 'activeassets/img/daojishi.png'
@@ -735,8 +737,10 @@
 					var anim = cursorPointer.animations.add('cursorAnimation');
 					cursorPointer.play('cursorAnimation', 2, true);
 					//音乐
-					var music = this.sound.add('countDown');
-					music.play();
+					// var music = this.sound.add('countDown');
+					// music.play();
+					audioElCountDown.play();
+					
 					// 开始游戏倒计时  sprite
 					daojishi = game.add.sprite(game.world.centerX - 140, game.world.centerY - 400, 'daojishi');
 					var anim1 = daojishi.animations.add('daojishi');
@@ -749,7 +753,7 @@
 					var cursorPointer3 = arguments[3]
 					var redPacketImg = arguments[4];
 					app.gameStatus = 2;
-					this.leftTime = gameTime
+					this.leftTime = app.countDownTime;
 					
 					daojishi.kill();
 					cursorPointer3.kill();
@@ -885,11 +889,11 @@
 
 					this.tokenId = common.getUrlParam('tokenId');
 					this.secretKey = common.getUrlParam('secretKey');
-					
+					game = null;
 					//生成游戏
 					if (game == null) {
-						game = new Phaser.Game(document.documentElement.clientWidth, this.bodyHeight + 2, Phaser.AUTO, document.getElementById('red_packet'));
-						game.transparent = true;
+						game = new Phaser.Game(document.documentElement.clientWidth, this.bodyHeight + 2, Phaser.CANVAS, document.getElementById('red_packet'),null , true);
+						
 						game.state.add('boot', states.boot.bind(game));
 						game.state.add('preload', states.preload.bind(game));
 						game.state.add('main', states.main.bind(game));
@@ -929,10 +933,12 @@
 							dataType: "jsonp",
 							data: obj,
 							success: function(data) {
+								console.log(data)
 								if (data.statusCode == 100000) {
 									//data.data.ru = (this.noticeInfoList[data].noticeContent.toString()).replace(/\r\n/g, '<br/>')
 									if (data.data) {
 										_this.redRainActive = data.data;
+										_this.countDownTime = (data.data.seconds * 1000) || gameTime;
 										var serveTime = _this.redRainActive.serverTime,
 											startTime = _this.redRainActive.nearTime,
 											endTime = startTime.split(' ')[0] + ' ' + _this.redRainActive.end + ':00';
@@ -950,8 +956,15 @@
 										}
 									}
 									//this.countDown('2019-07-01 14:18:52','2019-07-01 16:00:00','2019-07-01 17:00:00');
-								} else {
-
+								} else if ( data.statusCode == 100201) {
+									if(data.data){
+										_this.redRainActive = {
+											rules:data.data.rules
+										}
+									}
+									_this.activeData = {
+										state : 'activeEnd'
+									}
 								}
 							},
 							error: function(data) {
@@ -962,7 +975,6 @@
 					onClickStart: function() {
 						var _this = this;
 						this.gameStatus = 1;
-						
 						game.state.start('main');
 					},
 					onClickBack: function() {
@@ -1015,6 +1027,21 @@
 							activeId: this.redRainActive.id,
 							firmId: this.firmId
 						}
+						try{
+							audioElCountDown.load();
+							audioElCountDown.play();
+							audioElOpen.load();
+							audioElOpen.play();
+							setTimeout(function(){
+								audioElOpen.pause();
+								audioElCountDown.pause();
+							},1)
+						}catch(e){
+							//TODO handle the exception
+							//alert('1')
+							
+						}
+						//return;
 						if (_this.activityTimerID) {
 							clearInterval(_this.activityTimerID)
 						}
@@ -1025,7 +1052,7 @@
 								data: obj,
 								success: function(data) {
 									if (data.statusCode == 100000) {
-										_this.onClickStart();
+										_this.onClickStart()
 									} else {
 										common.prompt(data.statusStr)
 									}
@@ -1154,11 +1181,12 @@
 							_this.activeData = data;
 						}
 					},
-					mainReactClear(){
+					mainReactClear:function(){
 						this.gameStatus = 0;
 						this.clickNum = 0;
 						openRedAnimationTimerId && clearInterval(openRedAnimationTimerId)
-						document.getElementById('audioOpen').play()
+						audioElOpen.play();
+						
 						openDialog.kill();
 						openImg.kill();
 						game.state.start('clearMain');
@@ -1167,5 +1195,7 @@
 				}
 			})
 		})
+		
+		
 	</script>
 </html>
